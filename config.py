@@ -44,3 +44,9 @@ NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 # Conroe, TX Best Buy store ID — verify at bestbuy.com/site/store-locator
 BESTBUY_CONROE_STORE_ID = "1565"
 
+# Best Buy SKU mapping: product name -> SKU ID (numeric)
+# Empty string = discover from search. Use S25 Ultra (6612728) for testing until S26 listed.
+BESTBUY_SKU_MAP: dict[str, str] = {
+    "Samsung Galaxy S26 Ultra 512GB": "6612728",  # S25 Ultra 512GB for testing; update when S26 listed
+}
+

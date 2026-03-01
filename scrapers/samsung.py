@@ -1,13 +1,20 @@
 """
 Samsung.com scraper using Playwright.
 CSS-first extraction with AI parser fallback.
+Direct navigation to S26 Ultra buy page; selects 512GB variant.
 """
 import logging
 import re
 from playwright.async_api import async_playwright
-from scrapers.base import BaseScraper, RawDeal
+
+from scrapers.base import BaseScraper, RawDeal, _extract_urgency_deadline
 
 logger = logging.getLogger(__name__)
+
+SAMSUNG_S26_ULTRA_BUY_URL = "https://www.samsung.com/us/smartphones/galaxy-s26-ultra/buy/"
+PAGE_LOAD_TIMEOUT_MS = 30000
+VARIANT_SELECT_DELAY_MS = 1500
+PRICE_MIN, PRICE_MAX = 500, 2500  # Sanity range for S26 Ultra
 
 
 class SamsungScraper(BaseScraper):
@@ -16,6 +23,7 @@ class SamsungScraper(BaseScraper):
     async def fetch(self, sku: str, zip_code: str) -> list[RawDeal]:
         """
         Fetch deal data from Samsung.com for the given SKU.
+        Navigates directly to S26 Ultra buy page, selects 512GB, extracts price/trade-in/perks.
         Returns empty list on failure.
         """
         try:
@@ -23,129 +31,125 @@ class SamsungScraper(BaseScraper):
                 logger.info(f"Starting Samsung scraper for SKU: {sku}")
                 browser = await p.chromium.launch(headless=True)
                 page = await browser.new_page()
-                
-                # Navigate to Galaxy S page
-                logger.info("Navigating to Samsung Galaxy S page")
-                await page.goto("https://www.samsung.com/us/smartphones/galaxy-s/", wait_until="networkidle")
-                
-                # Search for the SKU
-                logger.info(f"Searching for SKU: {sku}")
-                search_input = page.locator('input[type="search"], input[placeholder*="search" i], input[name*="search" i]').first
-                if await search_input.count() > 0:
-                    await search_input.fill(sku)
-                    await search_input.press("Enter")
-                    await page.wait_for_timeout(2000)
-                else:
-                    # Try to find product link directly
-                    product_link = page.locator(f'a:has-text("{sku}"), a[href*="galaxy-s"]').first
-                    if await product_link.count() > 0:
-                        await product_link.click()
-                        await page.wait_for_load_state("networkidle")
-                
-                # Get page content for fallback
-                raw_html = await page.content()
+
+                # Direct navigation to buy page
+                logger.info("Navigating to Samsung S26 Ultra buy page")
+                await page.goto(SAMSUNG_S26_ULTRA_BUY_URL, wait_until="networkidle", timeout=PAGE_LOAD_TIMEOUT_MS)
+
+                # Select 512GB storage variant
+                storage_512 = page.locator('button:has-text("512GB"), [role="button"]:has-text("512GB"), label:has-text("512GB")').first
+                if await storage_512.count() > 0:
+                    await storage_512.click()
+                    await page.wait_for_timeout(VARIANT_SELECT_DELAY_MS)
+
                 source_url = page.url
-                
-                # Extract data using CSS selectors
-                logger.info("Extracting data with CSS selectors")
+                raw_html = await page.content()
+                page_text = await page.text_content() or ""
+
                 parse_method = "css"
                 base_price = 0.0
                 trade_in_value = 0.0
                 perks: list[str] = []
+                # Samsung.com is direct-ship; "Where to buy" links to retailers
                 pickup_available = False
-                urgent = False
-                urgency_deadline: str | None = None
-                
+
                 try:
-                    # Try common price selectors
+                    # Base price — try multiple selectors
                     price_selectors = [
                         '[data-testid*="price"]',
-                        '.price',
                         '[class*="price"]',
+                        '.price',
                         'span:has-text("$")',
+                        '[data-automation-id="product-price"]',
                     ]
                     for selector in price_selectors:
-                        price_elem = page.locator(selector).first
-                        if await price_elem.count() > 0:
-                            price_text = await price_elem.text_content()
-                            if price_text:
-                                # Extract numeric value
-                                price_match = re.search(r'\$?([\d,]+\.?\d*)', price_text.replace(',', ''))
-                                if price_match:
-                                    base_price = float(price_match.group(1))
-                                    logger.info(f"Extracted base_price: ${base_price}")
-                                    break
-                    
+                        price_elems = page.locator(selector)
+                        for i in range(await price_elems.count()):
+                            text = await price_elems.nth(i).text_content()
+                            if text:
+                                match = re.search(r'\$?([\d,]+\.?\d*)', text.replace(",", ""))
+                                if match:
+                                    val = float(match.group(1))
+                                    if PRICE_MIN < val < PRICE_MAX:
+                                        base_price = val
+                                        logger.info(f"Extracted base_price: ${base_price}")
+                                        break
+                        if base_price > 0:
+                            break
+
+                    if base_price == 0.0:
+                        # Fallback: "From $1,299.99" in page text
+                        match = re.search(r'from\s+\$?([\d,]+\.?\d*)', page_text, re.IGNORECASE)
+                        if match:
+                            base_price = float(match.group(1).replace(",", ""))
+                            logger.info(f"Extracted base_price from text: ${base_price}")
+
                     if base_price == 0.0:
                         raise ValueError("Could not extract base_price")
-                    
-                    # Try trade-in value selectors
+
+                    # Trade-in value — "up to $900", "S24 Ultra" specific
                     trade_in_selectors = [
                         '[data-testid*="trade"]',
                         '[class*="trade"]',
                         'text=/trade.*in/i',
+                        'text=/instant trade-in/i',
+                        r'text=/up to \$/i',
                     ]
                     for selector in trade_in_selectors:
-                        trade_elem = page.locator(selector).first
-                        if await trade_elem.count() > 0:
-                            trade_text = await trade_elem.text_content()
-                            if trade_text:
-                                trade_match = re.search(r'\$?([\d,]+\.?\d*)', trade_text.replace(',', ''))
-                                if trade_match:
-                                    trade_in_value = float(trade_match.group(1))
+                        elems = page.locator(selector)
+                        for i in range(await elems.count()):
+                            text = await elems.nth(i).text_content()
+                            if text and ("900" in text or "800" in text or "700" in text):
+                                match = re.search(r'\$?([\d,]+)', text.replace(",", ""))
+                                if match:
+                                    trade_in_value = float(match.group(1))
                                     logger.info(f"Extracted trade_in_value: ${trade_in_value}")
                                     break
-                    
-                    # Extract perks (bonuses, credits, accessories)
-                    perk_selectors = [
-                        '[data-testid*="perk"]',
-                        '[class*="bonus"]',
-                        '[class*="credit"]',
-                        'text=/Galaxy Buds/i',
-                        'text=/reserve credit/i',
+                        if trade_in_value > 0:
+                            break
+
+                    if trade_in_value == 0.0:
+                        match = re.search(r'up to \$([\d,]+)\s*(?:instant)?\s*trade-in', page_text, re.IGNORECASE)
+                        if match:
+                            trade_in_value = float(match.group(1).replace(",", ""))
+                            logger.info(f"Extracted trade_in_value from text: ${trade_in_value}")
+
+                    # Perks — specific keywords first; generic "reserve credit" only if no specific match
+                    perk_keywords = [
+                        "Double up your storage",
+                        "Galaxy Buds 4 Pro",
+                        "Galaxy Buds 4",
+                        "$50 reserve credit",
+                        "$30 reserve credit",
+                        "2x value",
                     ]
-                    for selector in perk_selectors:
-                        perk_elems = page.locator(selector)
-                        count = await perk_elems.count()
-                        for i in range(count):
-                            perk_text = await perk_elems.nth(i).text_content()
-                            if perk_text:
-                                perks.append(perk_text.strip())
-                    
-                    logger.info(f"Extracted {len(perks)} perks")
-                    
-                    # Check pickup availability for zip 77304
-                    zip_input = page.locator('input[type="text"][placeholder*="zip" i], input[name*="zip" i]').first
-                    if await zip_input.count() > 0:
-                        await zip_input.fill(zip_code)
-                        await zip_input.press("Enter")
-                        await page.wait_for_timeout(1000)
-                    
-                    pickup_text = await page.locator('text=/available.*pickup/i, text=/pickup.*available/i').first.text_content()
-                    if pickup_text:
-                        pickup_available = True
-                        logger.info("Pickup available detected")
-                    
+                    page_lower = page_text.lower()
+                    for kw in perk_keywords:
+                        if kw.lower() in page_lower:
+                            perks.append(kw)
+                    # Add generic "reserve credit" only if no specific reserve credit matched
+                    if "reserve credit" in page_lower and not any("reserve" in p for p in perks):
+                        perks.append("reserve credit")
+                    perks = list(dict.fromkeys(perks))
+
+                    logger.info(f"Extracted {len(perks)} perks: {perks}")
+
                 except Exception as e:
                     logger.warning(f"CSS extraction failed: {e}. Falling back to AI parser.")
                     parse_method = "ai"
-                
-                # Detect urgency
-                page_text = await page.text_content()
-                urgency_match = re.search(r'offer[s]?\s+end[s]?[:\s]+([^\.\n]+)', page_text or "", re.IGNORECASE)
-                if urgency_match:
-                    urgent = True
-                    urgency_deadline = urgency_match.group(1).strip()
-                    logger.info(f"Urgent deal detected. Deadline: {urgency_deadline}")
-                
+
+                # E-05: Time-limited deal detection (72h rule)
+                urgent, urgency_deadline = _extract_urgency_deadline(page_text)
+                if urgency_deadline:
+                    logger.info(f"Urgency: urgent={urgent}, deadline={urgency_deadline}")
+
                 await browser.close()
-                
-                # Create RawDeal
+
                 deal = RawDeal(
                     source=self.source_name,
                     sku=sku,
-                    base_price=base_price,
-                    trade_in_value=trade_in_value,
+                    base_price=round(base_price, 2),
+                    trade_in_value=round(trade_in_value, 2),
                     perks=perks,
                     pickup_available=pickup_available,
                     urgent=urgent,
@@ -154,11 +158,10 @@ class SamsungScraper(BaseScraper):
                     raw_html=raw_html if parse_method == "ai" else "",
                     parse_method=parse_method,
                 )
-                
+
                 logger.info(f"Samsung scraper completed. Parse method: {parse_method}")
                 return [deal]
-                
+
         except Exception as e:
             logger.error(f"Samsung scraper failed for {sku}: {e}")
             return []
-
