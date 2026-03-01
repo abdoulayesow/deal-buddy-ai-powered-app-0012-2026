@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deal Scout AI — Daily Digest</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+        <tr>
+            <td align="center" style="padding: 20px 0;">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #1a1a1a; color: #ffffff; padding: 20px; text-align: center;">
+                            <h1 style="margin: 0; font-size: 24px; font-weight: bold;">Deal Scout AI — Daily Digest</h1>
+                        </td>
+                    </tr>
+                    
+                    <!-- Deals -->
+                    {% for deal in deals %}
+                    <tr>
+                        <td style="padding: 20px;">
+                            <div style="border-left: {% if deal == best %}4px solid #4CAF50{% else %}4px solid #e0e0e0{% endif %}; padding-left: 16px; margin-bottom: 20px; background-color: {% if deal == best %}#f1f8f4{% else %}#fafafa{% endif %}; border-radius: 4px; padding: 16px;">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                    <div>
+                                        <h2 style="margin: 0 0 8px 0; font-size: 18px; color: #333;">{{ deal.sku }}</h2>
+                                        <p style="margin: 0; color: #666; font-size: 14px;">Source: <strong>{{ deal.source|upper }}</strong></p>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        {% if deal == best and deal.is_30d_low %}
+                                        <span style="background-color: #ff6b6b; color: #ffffff; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 4px;">🔥 30-Day Low</span><br>
+                                        {% endif %}
+                                        {% if deal.urgent %}
+                                        <span style="background-color: #ff4444; color: #ffffff; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block;">⚠️ Offer Expires: {{ deal.urgency_deadline or 'Soon' }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 12px;">
+                                    <tr>
+                                        <td style="color: #666; font-size: 14px; padding: 4px 0;">Base Price:</td>
+                                        <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">${{ "%.2f"|format(deal.base_price) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #666; font-size: 14px; padding: 4px 0;">Trade-In Value:</td>
+                                        <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">-${{ "%.2f"|format(deal.trade_in_value) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #666; font-size: 14px; padding: 4px 0;">Perks Value:</td>
+                                        <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">-${{ "%.2f"|format(deal.perk_value) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #666; font-size: 14px; padding: 4px 0;">Tax:</td>
+                                        <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">${{ "%.2f"|format(deal.tax) }}</td>
+                                    </tr>
+                                    <tr style="border-top: 2px solid #333;">
+                                        <td style="color: #333; font-size: 16px; font-weight: bold; padding: 8px 0 4px 0;">TCO:</td>
+                                        <td style="text-align: right; font-size: 18px; font-weight: bold; padding: 8px 0 4px 0; color: #1a1a1a;">${{ "%.2f"|format(deal.tco) }}</td>
+                                    </tr>
+                                </table>
+                                
+                                {% if deal.pickup_available %}
+                                <p style="margin: 12px 0 0 0; color: #4CAF50; font-size: 12px;">✓ Available for pickup</p>
+                                {% endif %}
+                                
+                                {% if deal.source_url %}
+                                <p style="margin: 12px 0 0 0;">
+                                    <a href="{{ deal.source_url }}" style="color: #0066cc; text-decoration: none; font-size: 12px;">View Deal →</a>
+                                </p>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9f9f9; padding: 16px; text-align: center; border-top: 1px solid #e0e0e0;">
+                            <p style="margin: 0; color: #666; font-size: 12px;">Conroe, TX 77304 · Tax rate: 8.25% · Perk valuation: 70% MSRP</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+
