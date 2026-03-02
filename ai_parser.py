@@ -31,6 +31,11 @@ HTML (first 12000 chars):
 """
 
 
+def _strip_markdown_json(text: str) -> str:
+    """Strip markdown code fences (e.g. ```json ... ```) from LLM response text."""
+    return text.strip().lstrip("```json").rstrip("```").strip()
+
+
 async def parse_with_claude(html: str) -> dict:
     client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
     response = await client.messages.create(
@@ -48,8 +53,7 @@ async def parse_with_gemini(html: str) -> dict:
     model = genai.GenerativeModel("gemini-2.0-flash-exp")
     prompt = SYSTEM_PROMPT + "\n\n" + USER_PROMPT_TEMPLATE.format(html=html[:12000])
     response = await model.generate_content_async(prompt)
-    text = response.text.strip().lstrip("```json").rstrip("```").strip()
-    return json.loads(text)
+    return json.loads(_strip_markdown_json(response.text))
 
 
 async def parse_with_ollama(html: str) -> dict:
@@ -63,8 +67,7 @@ async def parse_with_ollama(html: str) -> dict:
             }
         )
         result = response.json()
-        text = result["response"].strip().lstrip("```json").rstrip("```").strip()
-        return json.loads(text)
+        return json.loads(_strip_markdown_json(result["response"]))
 
 
 async def parse_deal(html: str) -> dict | None:

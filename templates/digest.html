@@ -51,6 +51,16 @@
                                         <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">-${{ "%.2f"|format(deal.perk_value) }}</td>
                                     </tr>
                                     <tr>
+                                        <td style="color: #666; font-size: 14px; padding: 4px 0;">Financing Benefit:</td>
+                                        <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">-${{ "%.2f"|format(deal.financing_benefit) }}</td>
+                                    </tr>
+                                    {% if deal.monthly_payment and deal.term_months %}
+                                    <tr>
+                                        <td style="color: #666; font-size: 14px; padding: 4px 0;">Monthly / Term:</td>
+                                        <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">${{ "%.2f"|format(deal.monthly_payment) }}/mo × {{ deal.term_months }}mo</td>
+                                    </tr>
+                                    {% endif %}
+                                    <tr>
                                         <td style="color: #666; font-size: 14px; padding: 4px 0;">Tax:</td>
                                         <td style="text-align: right; font-size: 14px; padding: 4px 0; color: #333;">${{ "%.2f"|format(deal.tax) }}</td>
                                     </tr>

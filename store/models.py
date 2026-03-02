@@ -22,12 +22,17 @@ class Deal(Base):
     perk_value: Mapped[float] = mapped_column(Float, default=0.0)
     tax: Mapped[float] = mapped_column(Float, default=0.0)
     tco: Mapped[float] = mapped_column(Float)
+    financing_benefit: Mapped[float] = mapped_column(Float, default=0.0)
     pickup_available: Mapped[bool] = mapped_column(Boolean, default=False)
     urgent: Mapped[bool] = mapped_column(Boolean, default=False)
     urgency_deadline: Mapped[str | None] = mapped_column(String(64), nullable=True)
     perks_raw: Mapped[str] = mapped_column(Text, default="")   # comma-separated
     source_url: Mapped[str] = mapped_column(Text, default="")
     raw_json: Mapped[str] = mapped_column(Text, default="")
+    # E-03: Carrier deal fields (nullable)
+    monthly_payment: Mapped[float | None] = mapped_column(Float, nullable=True)
+    term_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lock_in_penalty: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class RunLog(Base):

@@ -71,6 +71,11 @@ class RawDeal:
     source_url: str = ""
     raw_html: str = ""          # stored for AI parser fallback
     parse_method: str = "css"   # "css" | "ai"
+    # E-03: Carrier deal fields (optional, None for retailers)
+    monthly_payment: float | None = None
+    term_months: int | None = None
+    lock_in_penalty: float | None = None
+    effective_price: float | None = None
 
 
 class BaseScraper(ABC):
